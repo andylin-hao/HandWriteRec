@@ -5,6 +5,7 @@ from keras.optimizers import SGD, RMSprop
 from keras.utils import to_categorical
 from keras.utils.vis_utils import plot_model
 from keras.callbacks import ReduceLROnPlateau
+from keras.preprocessing.image import ImageDataGenerator
 import pandas as pd
 import numpy as np
 import os
@@ -57,15 +58,43 @@ class Model:
         })
         data_frame.to_csv('result_' + self.__name__ + '.csv', index=False)
 
-    def train(self, save=True):
-        callback = ReduceLROnPlateau(monitor='val_acc', patience=10, verbose=1, factor=0.5, min_lr=1e-5)
-        self.model.fit(self.train_data, self.train_labels, batch_size=200, epochs=self.epoch, verbose=2,
-                       validation_data=(self.validation_data, self.validation_labels), callbacks=[callback])
+    def train(self, data_augmentation=False, save=True):
+        callback = ReduceLROnPlateau(monitor='val_accuracy', patience=5, verbose=1, factor=0.5, min_lr=1e-6)
+        if data_augmentation and self.__name__ == 'CNN':
+            data_generate = ImageDataGenerator(
+                featurewise_center=False,
+                samplewise_center=False,
+                featurewise_std_normalization=False,
+                samplewise_std_normalization=False,
+                zca_epsilon=1e-6,
+                zca_whitening=False,
+                rotation_range=0,
+                width_shift_range=0.1,
+                height_shift_range=0.1,
+                shear_range=0.,
+                zoom_range=0.,
+                channel_shift_range=0.,
+                fill_mode='nearest',
+                cval=0.,
+                horizontal_flip=True,
+                vertical_flip=False,
+                rescale=None,
+                preprocessing_function=None,
+                data_format=None,
+                validation_split=0.0
+            )
+            data_generate.fit(self.train_data)
+            self.model.fit(data_generate.flow(self.train_data, self.train_labels, 500), batch_size=500,
+                           epochs=self.epoch, verbose=2,
+                           validation_data=(self.validation_data, self.validation_labels), callbacks=[callback])
+        else:
+            self.model.fit(self.train_data, self.train_labels, batch_size=500, epochs=self.epoch, verbose=2,
+                           validation_data=(self.validation_data, self.validation_labels), callbacks=[callback])
         scores = self.model.evaluate(self.validation_data, self.validation_labels)
         print(scores)
 
         if save:
-            self.model.save(self.__name__ + '.h5')
+            self.model.save(self.__name__ + '.h5', save_format='h5')
 
     def load(self):
         if not os.path.exists(self.__name__ + '.h5'):
@@ -73,7 +102,7 @@ class Model:
         self.model = load_model(self.__name__ + '.h5')
 
     def plot(self):
-        plot_model(self.model, self.__name__+'.png', show_shapes=True)
+        plot_model(self.model, self.__name__ + '.png', show_shapes=True)
 
 
 class CNNModel(Model):
